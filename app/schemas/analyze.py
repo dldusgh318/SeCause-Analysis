@@ -22,6 +22,15 @@ class AnalyzeRequest(BaseModel):
         validation_alias=AliasChoices("githubToken", "github_token"),
     )
 
+    def to_job_payload(self) -> dict:
+        return {
+            "analysis_id": self.analysis_id,
+            "repository_id": self.repository_id,
+            "repository_url": self.repository_url,
+            "branch": self.branch,
+            "github_token": self.github_token.get_secret_value(),
+        }
+
 
 class AnalyzeResponse(BaseModel):
     model_config = ConfigDict(populate_by_name=True)
