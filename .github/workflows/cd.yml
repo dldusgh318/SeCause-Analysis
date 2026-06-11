@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -60,5 +62,20 @@ jobs:
             docker compose pull analysis-api analysis-worker analysis-redis
             docker compose up -d analysis-redis
             docker compose up -d --no-deps analysis-api analysis-worker
+
+            #  헬스 체크 (최대 30초 대기)
+            echo "Waiting for services to be healthy..."
+            for i in {1..30}; do
+              if curl -f http://localhost:8001/health > /dev/null 2>&1; then
+                echo "✅ Health check passed"
+                break
+              fi
+              if [ $i -eq 30 ]; then
+                echo "❌ Health check failed, rolling back..."
+                docker compose down analysis-api analysis-worker
+                exit 1
+              fi
+              sleep 1
+            done
 
             docker image prune -f
