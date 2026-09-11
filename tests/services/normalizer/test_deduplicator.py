@@ -1,10 +1,7 @@
 import unittest
 
 from app.schemas.finding import Finding, FindingSeverity, FindingTool
-from app.services.normalizer.deduplicator import (
-    build_deduplication_key,
-    deduplicate_findings,
-)
+from app.services.normalizer.deduplicator import deduplicate_findings
 from app.services.normalizer.finding_normalizer import normalize_findings
 from app.services.scanner.base import RawFinding
 
@@ -24,18 +21,41 @@ class DeduplicatorTest(unittest.TestCase):
         semgrep = build_finding("CWE-89", "SQL_INJECTION", " src/db.py ", 10)
         codeql = build_finding("CWE-89", "SQL_QUERY_BUILT_FROM_USER", "src/db.py", 10)
 
-        self.assertEqual(
-            build_deduplication_key(semgrep),
-            build_deduplication_key(codeql),
-        )
+        deduplicated = deduplicate_findings([semgrep, codeql])
 
-    def test_build_deduplication_key_uses_type_when_cwe_is_missing(self):
-        finding = build_finding(None, "SQL_INJECTION", "src/db.py", 10)
+        self.assertEqual(len(deduplicated), 1)
 
-        self.assertEqual(
-            build_deduplication_key(finding),
-            ("sql_injection", "src/db.py", 10),
-        )
+    def test_deduplicate_findings_uses_type_when_cwe_is_missing(self):
+        semgrep = build_finding(None, "SQL_INJECTION", "src/db.py", 10)
+        codeql = build_finding(None, "sql_injection", "src/db.py", 10)
+
+        deduplicated = deduplicate_findings([semgrep, codeql])
+
+        self.assertEqual(len(deduplicated), 1)
+
+    def test_deduplicate_findings_keeps_case_sensitive_paths_distinct(self):
+        upper_path = build_finding("CWE-89", "SQL_INJECTION", "src/User.py", 10)
+        lower_path = build_finding("CWE-89", "SQL_INJECTION", "src/user.py", 10)
+
+        deduplicated = deduplicate_findings([upper_path, lower_path])
+
+        self.assertEqual(len(deduplicated), 2)
+
+    def test_deduplicate_findings_skips_merge_without_line_start(self):
+        first = build_finding("CWE-89", "SQL_INJECTION", "src/db.py", None)
+        second = build_finding("CWE-89", "SQL_INJECTION", "src/db.py", None)
+
+        deduplicated = deduplicate_findings([first, second])
+
+        self.assertEqual(len(deduplicated), 2)
+
+    def test_deduplicate_findings_skips_merge_for_unknown_file_path(self):
+        first = build_finding("CWE-89", "SQL_INJECTION", "unknown", 10)
+        second = build_finding("CWE-89", "SQL_INJECTION", "unknown", 10)
+
+        deduplicated = deduplicate_findings([first, second])
+
+        self.assertEqual(len(deduplicated), 2)
 
     def test_deduplicate_findings_keeps_higher_severity(self):
         low = build_finding(
